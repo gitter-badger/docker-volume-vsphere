@@ -34,21 +34,6 @@
 #include "vmci_sockets.h"
 #include "connection_types.h"
 
-static int
-vsock_get_family(void)
-{
-   static int af = -1;
-
-   if (af == -1) { // TODO: need lock when going multi-threaded. Issue #35
-      errno = 0;
-      af = VMCISock_GetAFValue();
-      if (af == -1) {
-         errno = EAFNOSUPPORT; // report "family not supported" upstairs
-      }
-   }
-
-   return af;
-}
 
 // Returns vSocket to listen on, or -1.
 // errno indicates the reason for a failure, if any.
@@ -57,18 +42,11 @@ vmci_init(void)
 {
    struct sockaddr_vm addr;
    socklen_t addrLen;
-   int af; // socket family for VMCI communication
    int ret;
    int socket_fd; // socket to open
    int saved_errno; // buffer for retaining errno
+   int af = vsock_get_family(); // socket family for vSockets communication
 
-   /*
-    * The address family for vSockets must be acquired, it is not static.
-    * We hold onto the family we get back by keeping the fd to the device
-    * open.
-    */
-
-   af = vsock_get_family();
    if (af == -1) {
       return CONN_FAILURE;
    }
@@ -120,7 +98,7 @@ vmci_get_one_op(const int s,    // socket to listen on
    socklen_t addrLen;
    struct sockaddr_vm addr;
    int client_socket = -1; // connected socket to talk to client
-   int af = vsock_get_family();
+   int af = vsock_get_family(); // socket family for vSockets communication
 
    if (af == -1) {
       return CONN_FAILURE;
@@ -155,7 +133,8 @@ vmci_get_one_op(const int s,    // socket to listen on
     * the message has MAGIC, length, and the actual data.
     *
     */
-   // magic:
+
+   // get magic:
    b = 0;
    ret = recv(client_socket, &b, sizeof b, 0);
    if (ret == -1 || b != MAGIC) {
@@ -168,7 +147,7 @@ vmci_get_one_op(const int s,    // socket to listen on
       return CONN_FAILURE;
    }
 
-   // length:
+   // get length:
    b = 0;
    ret = recv(client_socket, &b, sizeof b, 0);
    if (ret == -1) {
@@ -197,7 +176,7 @@ vmci_get_one_op(const int s,    // socket to listen on
       errno = saved_errno;
       return CONN_FAILURE;
    }
-   // protocol sanity check
+   // do protocol sanity check
    if (strlen(buf) + 1 != b) {
       fprintf(stderr, "Protocol error: len mismatch, expected %d, got %d\n",
                strlen(buf), b);

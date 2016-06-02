@@ -154,25 +154,10 @@ dummy_get_reply(be_sock_id *id, be_request *r, be_answer* a)
 // vsocket interface implementation
 //---------------------------------
 
-// Get socket family for VMCI. Returns -1 on failure
-// Actually opens and keep FD to /dev/vsock to indicate
-// to the kernel that VMCI driver is used by this process.
-// Need to be inited once.
-// Can be released explicitly on exit, or left as is and process completion
-// will clean it up
-static int
-vsock_get_family(void)
-{
-   static int af = -1;
 
-   if (af == -1) { // TODO: for multi-thread will need a lock. Issue #35
-      af = VMCISock_GetAFValue();
-   }
-   return af;
-}
 
 // Create and connect VMCI socket.
-// return success (0) or failure (-1)
+// return CONN_SUCCESS (0) or CONN_FAILURE (-1)
 static be_sock_status
 vsock_init(be_sock_id *id, int cid, int port)
 {
@@ -181,7 +166,6 @@ vsock_init(be_sock_id *id, int cid, int port)
    int sock;     // socket id
 
    if ((af = vsock_get_family()) == -1) {
-      errno = EAFNOSUPPORT;
       return CONN_FAILURE;
    }
    sock = socket(af, SOCK_STREAM, 0);

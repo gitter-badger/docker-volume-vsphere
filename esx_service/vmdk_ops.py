@@ -653,6 +653,7 @@ def signal_handler_stop(signalnum, frame):
 
 # load VMCI shared lib , listen on vSocket in main loop, handle requests
 def handleVmciRequests():
+    VMCI_ERROR = -1 # VMCI C code uses '-1' to indicate failures
     # Load and use DLL with vsocket shim to listen for docker requests
     lib = CDLL(os.path.join(LIB_LOC, "libvmci_srv.so"), use_errno=True)
 
@@ -661,7 +662,7 @@ def handleVmciRequests():
 
     cartel = c_int32()
     sock = lib.vmci_init()
-    if sock == -1:
+    if sock == VMCI_ERROR:
         errno = get_errno()
         raise OSError("Failed to initialize vSocket listener: %s (errno=%d)" \
                         %  (os.strerror(errno), errno))
@@ -672,7 +673,7 @@ def handleVmciRequests():
         logging.debug("lib.vmci_get_one_op returns %d, buffer '%s'",
                       c, txt.value)
 
-        if c == -1:
+        if c == VMCI_ERROR:
             # We can self-correct by reoping sockets internally. Give it a chance.
             errno = get_errno()
             logging.warning("vmci_get_one_op failed ret=%d: %s (errno=%d) Retrying...",
@@ -708,6 +709,9 @@ def handleVmciRequests():
         response = lib.vmci_reply(c, c_char_p(json.dumps(ret)))
         errno = get_errno()
         logging.debug("lib.vmci_reply: VMCI replied with errcode %s", response)
+        if response == VMCI_ERROR:
+            logging.warning("vmci_reply returned error %s (errno=%d)",
+                            os.strerror(errno), errno)
 
     lib.close(sock)  # close listening socket when the loop is over
 

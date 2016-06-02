@@ -25,6 +25,30 @@
 // 0 is usually success. Note: sometimes we return socket FD on success
 #define CONN_SUCCESS  (0)
 
+/*
+ * This function acquires and returns address family for vSockets.
+ * On failure returns -1 an sets errno (if not set by VMCISock_GetAFValue ())
+ *
+ * The address family for vSockets must be acquired, it is not static.
+ * The code opens and keeps FD to /dev/vsock to indicate to the kernel
+ * that VMCI driver is used by this process.
+ * Needs to be called once per process.
+ * <af> is expected to be closed by process completion
+ */
+static inline int
+vsock_get_family(void)
+{
+   static int af = -1;
+
+   errno = 0;
+   if (af == -1) { // TODO: for multi-thread will need a lock. Issue #35
+      af = VMCISock_GetAFValue();
+   }
+   if (af == -1 && errno == 0) {
+      errno = EAFNOSUPPORT; // report "family not supported" upstairs
+   }
+   return af;
+}
 
 #endif // _CONNECTION_TYPES_H_
 
